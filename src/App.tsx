@@ -260,7 +260,13 @@ const App: React.FC = () => {
   };
 
   const handleSelectGroup = (g: { id: string; name: string }) => {
-    setVentanaGroup({ id: g.id, name: g.name });
+    // Si el id está vacío, significa que quiere volver a alarmas personales
+    if (!g.id) {
+      setVentanaGroup(null);
+      setProfile((prev) => (prev ? { ...prev, groupId: null, groupName: null } : prev));
+    } else {
+      setVentanaGroup({ id: g.id, name: g.name });
+    }
   };
 
   const handleAcceptMember = async (userId: string) => {

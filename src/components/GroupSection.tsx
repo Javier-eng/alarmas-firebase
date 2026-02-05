@@ -97,6 +97,22 @@ const GroupSection: React.FC<GroupSectionProps> = ({
           <h3 className="text-lg font-bold text-gray-800 mb-4">Grupos que he creado</h3>
           <p className="text-sm text-gray-600 mb-4">Pulsa en un grupo para ver sus alarmas en el listado de arriba.</p>
           <ul className="space-y-4">
+            {/* Opción para volver a alarmas personales */}
+            <li
+              className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 rounded-2xl border-2 transition-colors ${
+                currentGroupId === null ? 'border-blue-500 bg-blue-50/50' : 'border-gray-200 bg-gray-50/50'
+              }`}
+            >
+              <button
+                type="button"
+                onClick={() => onSelectGroup({ id: '', name: 'Mis alarmas personales' })}
+                className="min-w-0 flex-1 text-left hover:opacity-90"
+              >
+                <p className="font-semibold text-gray-800">👤 Mis alarmas personales</p>
+                <p className="text-sm text-gray-600 mt-1">Ver solo mis alarmas (sin grupo)</p>
+                <span className="text-xs text-blue-600 font-medium mt-1 inline-block">Ver mis alarmas →</span>
+              </button>
+            </li>
             {myGroups.map((g) => (
               <li
                 key={g.id}

@@ -45,8 +45,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
           const p = await createOrUpdateUser(u);
           setProfileState(p);
-          requestNotificationPermission(u.uid);
-          onForegroundMessage();
+          
+          // Esperar un momento para asegurar que la autenticación esté completa
+          // antes de solicitar permisos de notificación
+          setTimeout(async () => {
+            // Verificar nuevamente que el usuario sigue autenticado
+            const currentUser = auth.currentUser;
+            if (currentUser && currentUser.uid === u.uid) {
+              try {
+                await requestNotificationPermission(u.uid);
+                onForegroundMessage();
+              } catch (notificationError) {
+                // Error ya manejado en requestNotificationPermission
+                console.debug('Error al solicitar permisos de notificación:', notificationError);
+              }
+            }
+          }, 1000); // Esperar 1 segundo después de la autenticación
         } catch (e) {
           console.error('Error al cargar perfil:', e);
           setProfileState({
