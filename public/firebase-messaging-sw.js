@@ -11,16 +11,23 @@ firebase.initializeApp({"apiKey":"","authDomain":"","projectId":"","storageBucke
 const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage(function (payload) {
+  console.log('[Service Worker] Mensaje recibido en background:', payload);
+  
   const title = payload.notification?.title ?? payload.data?.title ?? 'MyDays';
   const body = payload.notification?.body ?? payload.data?.body ?? '';
+  
   const options = {
     body,
     icon: '/vite.svg',
     badge: '/vite.svg',
     tag: payload.data?.alarmId || 'alarm',
     requireInteraction: false,
+    // Opciones adicionales para Android
+    vibrate: [200, 100, 200],
+    data: payload.data || {},
   };
-  self.registration.showNotification(title, options);
+  
+  return self.registration.showNotification(title, options);
 });
 
 // Manejar clics en notificaciones

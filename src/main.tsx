@@ -6,19 +6,42 @@ import App from './App'
 
 // Registrar Service Worker para notificaciones push
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker
-      .register('/firebase-messaging-sw.js', { scope: '/' })
-      .then(() => {
-        // Service Worker registrado correctamente
-      })
-      .catch((error) => {
-        // Error silencioso en producción para no molestar al usuario
-        if (import.meta.env.DEV) {
-          console.warn('Error al registrar Service Worker:', error);
-        }
+  // Registrar inmediatamente, no esperar a 'load' (mejor para móviles)
+  const registerServiceWorker = async () => {
+    try {
+      const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { 
+        scope: '/' 
       });
-  });
+      
+      // Esperar a que el Service Worker esté activo (importante para Android)
+      if (registration.installing) {
+        await new Promise<void>((resolve) => {
+          registration.installing!.addEventListener('statechange', () => {
+            if (registration.installing!.state === 'activated') {
+              resolve();
+            }
+          });
+        });
+      } else if (registration.waiting) {
+        // Si está esperando, activarlo
+        registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+      }
+      
+      console.info('Service Worker registrado correctamente:', registration.scope);
+    } catch (error) {
+      console.error('Error al registrar Service Worker:', error);
+      // En desarrollo, mostrar siempre; en producción, solo errores críticos
+      if (import.meta.env.DEV) {
+        console.warn('Detalles del error:', error);
+      }
+    }
+  };
+  
+  // Intentar registrar inmediatamente
+  registerServiceWorker();
+  
+  // También registrar cuando la página cargue (fallback)
+  window.addEventListener('load', registerServiceWorker);
 }
 
 class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
