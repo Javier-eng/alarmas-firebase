@@ -1,0 +1,12 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "pending",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "requestedAt", "order": "ASCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
