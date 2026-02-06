@@ -187,18 +187,49 @@ export const subscribeToMyPendingStatus = (
   );
 };
 
+/** Grupos donde el usuario es owner o miembro (varios grupos permitidos). */
 export const subscribeToMyGroups = (userId: string, callback: (groups: GroupInfo[]) => void) => {
-  const q = query(collection(db, 'groups'), where('owner', '==', userId));
-  return onSnapshot(q, (snapshot) => {
-    const groups = snapshot.docs.map((d) => ({
-      id: d.id,
-      name: (d.data().name as string) ?? 'Mi Grupo',
-      owner: d.data().owner as string,
-      createdAt: (d.data().createdAt as number) ?? 0,
-    }));
-    groups.sort((a, b) => b.createdAt - a.createdAt);
+  const byId = new Map<string, GroupInfo>();
+
+  const mergeAndEmit = () => {
+    const groups = Array.from(byId.values()).sort((a, b) => b.createdAt - a.createdAt);
     callback(groups);
-  });
+  };
+
+  const unsubOwner = onSnapshot(
+    query(collection(db, 'groups'), where('owner', '==', userId)),
+    (snapshot) => {
+      snapshot.docs.forEach((d) => {
+        byId.set(d.id, {
+          id: d.id,
+          name: (d.data().name as string) ?? 'Mi Grupo',
+          owner: d.data().owner as string,
+          createdAt: (d.data().createdAt as number) ?? 0,
+        });
+      });
+      mergeAndEmit();
+    }
+  );
+
+  const unsubMember = onSnapshot(
+    query(collection(db, 'groups'), where('members', 'array-contains', userId)),
+    (snapshot) => {
+      snapshot.docs.forEach((d) => {
+        byId.set(d.id, {
+          id: d.id,
+          name: (d.data().name as string) ?? 'Mi Grupo',
+          owner: d.data().owner as string,
+          createdAt: (d.data().createdAt as number) ?? 0,
+        });
+      });
+      mergeAndEmit();
+    }
+  );
+
+  return () => {
+    unsubOwner();
+    unsubMember();
+  };
 };
 
 export const deleteGroup = async (userId: string, groupId: string): Promise<void> => {

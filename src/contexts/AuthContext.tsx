@@ -46,21 +46,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const p = await createOrUpdateUser(u);
           setProfileState(p);
           
-          // Esperar un momento para asegurar que la autenticación esté completa
-          // antes de solicitar permisos de notificación
+          // Web Push: solicitar permiso de notificaciones nada más loguearse y guardar FCM token en el perfil
           setTimeout(async () => {
-            // Verificar nuevamente que el usuario sigue autenticado
             const currentUser = auth.currentUser;
             if (currentUser && currentUser.uid === u.uid) {
               try {
-                await requestNotificationPermission(u.uid);
+                const token = await requestNotificationPermission(u.uid);
+                if (token) {
+                  // Token guardado en users/{uid}.fcmToken por requestNotificationPermission
+                  setProfileState((prev) => (prev ? { ...prev, fcmToken: token } : prev));
+                }
                 onForegroundMessage();
               } catch (notificationError) {
-                // Error ya manejado en requestNotificationPermission
                 console.debug('Error al solicitar permisos de notificación:', notificationError);
               }
             }
-          }, 1000); // Esperar 1 segundo después de la autenticación
+          }, 800); // Breve espera tras el login para solicitar notificaciones
         } catch (e) {
           console.error('Error al cargar perfil:', e);
           setProfileState({

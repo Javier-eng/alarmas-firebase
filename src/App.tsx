@@ -473,7 +473,6 @@ const App: React.FC = () => {
         <GroupSection
           myGroups={myGroups}
           currentGroupId={currentGroupId}
-          hasCurrentGroup={Boolean(profile?.groupId)}
           newGroupName={newGroupName}
           setNewGroupName={setNewGroupName}
           newGroupInput={newGroupInput}

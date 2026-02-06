@@ -4,7 +4,6 @@ import type { GroupInfo } from '../services/groupService';
 export type GroupSectionProps = {
   myGroups: GroupInfo[];
   currentGroupId: string | null;
-  hasCurrentGroup: boolean;
   newGroupName: string;
   setNewGroupName: (v: string) => void;
   newGroupInput: string;
@@ -23,7 +22,6 @@ export type GroupSectionProps = {
 const GroupSection: React.FC<GroupSectionProps> = ({
   myGroups,
   currentGroupId,
-  hasCurrentGroup,
   newGroupName,
   setNewGroupName,
   newGroupInput,
@@ -40,62 +38,66 @@ const GroupSection: React.FC<GroupSectionProps> = ({
 }) => {
   return (
     <>
-      {/* 1) Casilla azul: Tu grupo (crear / unirse) */}
-      {!hasCurrentGroup && (
-        <div className="bg-blue-600 rounded-3xl p-8 text-white shadow-lg">
-          <h3 className="text-2xl font-bold mb-2">Tu grupo</h3>
-          <p className="opacity-90 mb-4">Dale un nombre al grupo (ej. Familia García) y créalo. Luego comparte el ID de 6 letras para que otros se unan.</p>
-          <div className="mb-4">
-            <label className="block text-sm font-semibold opacity-90 mb-2">Nombre del grupo</label>
+      {/* 1) Crear grupo y Unirse a grupo — siempre visible (varios grupos permitidos) */}
+      <div className="bg-blue-600 rounded-3xl p-8 text-white shadow-lg">
+        <h3 className="text-2xl font-bold mb-2">
+          {myGroups.length > 0 ? 'Crear o unirse a otro grupo' : 'Tu grupo'}
+        </h3>
+        <p className="opacity-90 mb-4">
+          {myGroups.length > 0
+            ? 'Puedes crear un nuevo grupo o unirte a uno con su ID de 6 letras.'
+            : 'Dale un nombre al grupo (ej. Familia García) y créalo. Luego comparte el ID de 6 letras para que otros se unan.'}
+        </p>
+        <div className="mb-4">
+          <label className="block text-sm font-semibold opacity-90 mb-2">Nombre del grupo</label>
+          <input
+            type="text"
+            placeholder="Ej. Familia García"
+            value={newGroupName}
+            onChange={(e) => setNewGroupName(e.target.value)}
+            className="w-full px-4 py-3 rounded-2xl text-gray-800 placeholder:text-gray-500"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={onCreateGroup}
+          disabled={creatingGroup}
+          className="w-full bg-white text-blue-600 py-3 px-6 rounded-2xl font-bold hover:bg-blue-50 transition-colors shadow-sm disabled:opacity-70 disabled:cursor-not-allowed mb-6"
+        >
+          {creatingGroup ? 'Creando grupo...' : 'Crear Nuevo Grupo'}
+        </button>
+        <div className="border-t border-white/30 pt-6">
+          <p className="text-sm font-semibold mb-3 opacity-90">¿Tienes un ID de grupo?</p>
+          <p className="opacity-90 mb-3 text-sm">Introduce el <strong>ID de 6 letras</strong> (código tipo ABC123) para unirte.</p>
+          {joinError && (
+            <div className="mb-3 p-3 rounded-xl bg-red-500/30 text-white text-sm">{joinError}</div>
+          )}
+          <div className="flex flex-col sm:flex-row gap-3">
             <input
               type="text"
-              placeholder="Ej. Familia García"
-              value={newGroupName}
-              onChange={(e) => setNewGroupName(e.target.value)}
-              className="w-full px-4 py-3 rounded-2xl text-gray-800 placeholder:text-gray-500"
+              placeholder="ID de 6 letras, ej: ABC123"
+              value={newGroupInput}
+              onChange={(e) => setNewGroupInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && onJoinGroup()}
+              className="flex-1 px-5 py-3 rounded-2xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-white/50 uppercase"
             />
-          </div>
-          <button
-            type="button"
-            onClick={onCreateGroup}
-            disabled={creatingGroup}
-            className="w-full bg-white text-blue-600 py-3 px-6 rounded-2xl font-bold hover:bg-blue-50 transition-colors shadow-sm disabled:opacity-70 disabled:cursor-not-allowed mb-6"
-          >
-            {creatingGroup ? 'Creando grupo...' : 'Crear Nuevo Grupo'}
-          </button>
-          <div className="border-t border-white/30 pt-6">
-            <p className="text-sm font-semibold mb-3 opacity-90">¿Tienes un ID de grupo?</p>
-            <p className="opacity-90 mb-3 text-sm">Introduce el <strong>ID de 6 letras</strong> (código tipo ABC123), no el nombre del grupo.</p>
-            {joinError && (
-              <div className="mb-3 p-3 rounded-xl bg-red-500/30 text-white text-sm">{joinError}</div>
-            )}
-            <div className="flex flex-col sm:flex-row gap-3">
-              <input
-                type="text"
-                placeholder="ID de 6 letras, ej: ABC123"
-                value={newGroupInput}
-                onChange={(e) => setNewGroupInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && onJoinGroup()}
-                className="flex-1 px-5 py-3 rounded-2xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-white/50 uppercase"
-              />
-              <button
-                type="button"
-                onClick={onJoinGroup}
-                disabled={!newGroupInput.trim()}
-                className="bg-white text-blue-600 px-8 py-3 rounded-2xl font-bold hover:bg-blue-50 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Unirse
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={onJoinGroup}
+              disabled={!newGroupInput.trim()}
+              className="bg-white text-blue-600 px-8 py-3 rounded-2xl font-bold hover:bg-blue-50 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Unirse
+            </button>
           </div>
         </div>
-      )}
+      </div>
 
-      {/* 2) Listado de grupos que he creado — clic en un grupo para ver sus alarmas arriba */}
+      {/* 2) Listado de grupos (donde soy admin o miembro) — clic para ver alarmas */}
       {myGroups.length > 0 && (
-        <section className="bg-white rounded-3xl p-6 shadow-md border border-gray-100" aria-label="Grupos que he creado">
-          <h3 className="text-lg font-bold text-gray-800 mb-4">Grupos que he creado</h3>
-          <p className="text-sm text-gray-600 mb-4">Pulsa en un grupo para ver sus alarmas en el listado de arriba.</p>
+        <section className="bg-white rounded-3xl p-6 shadow-md border border-gray-100" aria-label="Mis grupos">
+          <h3 className="text-lg font-bold text-gray-800 mb-4">Mis grupos</h3>
+          <p className="text-sm text-gray-600 mb-4">Pulsa en un grupo para ver sus alarmas. Puedes ser administrador de uno y miembro de otros.</p>
           <ul className="space-y-4">
             {/* Opción para volver a alarmas personales */}
             <li

@@ -3,7 +3,8 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { db, messaging } from '../firebaseConfig';
 import { auth } from '../firebaseConfig';
 
-const VAPID_KEY = 'BGNwj8r6XTdVV8CsOIihsftBYh-uxNbMNJUz1fPV2OmdssdGXiNM8Wi4QSxU4_X1Juf31JV50nuNwkcJpO2Ft8E';
+/** VAPID Key de Firebase Cloud Messaging (Firebase Console → Configuración del proyecto → Cloud Messaging → Web push certificates) */
+const VAPID_KEY = 'BHA6YsnhfuchHZfBH8zadc8Fr0l9SPRakuSd886aMnd69n0fx40TNubK3mnGDT1UBVgjknEbKFsEnxikg_QVpPc';
 
 // Función auxiliar para verificar que el Service Worker esté activo
 const waitForServiceWorker = async (maxAttempts = 10): Promise<boolean> => {
