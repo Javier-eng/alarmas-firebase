@@ -27,6 +27,14 @@ const waitForServiceWorker = async (maxAttempts = 10): Promise<boolean> => {
   return false;
 };
 
+/**
+ * Solicita permisos de notificación y guarda el FCM Token en Firestore.
+ * Esta función se llama cada vez que el usuario entra/inicia sesión para asegurar
+ * que el token esté actualizado y guardado en users/{userId}.fcmToken
+ * 
+ * @param userId - UID del usuario autenticado
+ * @returns Token FCM o null si no se pudo obtener
+ */
 export const requestNotificationPermission = async (userId: string): Promise<string | null> => {
   if (!messaging) {
     console.warn('Firebase Messaging no está disponible. Verifica que todas las variables VITE_FIREBASE_* estén configuradas.');
@@ -40,7 +48,7 @@ export const requestNotificationPermission = async (userId: string): Promise<str
     return null;
   }
 
-  // Verificar que el Service Worker esté activo (crítico para Android)
+  // Verificar que el Service Worker esté activo (crítico para Android y notificaciones en background)
   const swReady = await waitForServiceWorker();
   if (!swReady) {
     console.warn('Service Worker no está listo. Reintentando en 2 segundos...');
@@ -89,13 +97,18 @@ export const requestNotificationPermission = async (userId: string): Promise<str
       return null;
     }
 
-    // Solicitar el token FCM
+    // Solicitar el token FCM (esto permite recibir notificaciones incluso con la pestaña cerrada)
     const token = await getToken(messaging, { vapidKey: VAPID_KEY });
     if (token) {
-      // Guardar el token en Firestore
+      // Guardar/actualizar el token en Firestore cada vez que el usuario entra
+      // Esto asegura que el token esté siempre actualizado para enviar notificaciones push
       try {
-        await updateDoc(doc(db, 'users', userId), { fcmToken: token });
-        console.info('✅ Token FCM obtenido y guardado correctamente.');
+        await updateDoc(doc(db, 'users', userId), { 
+          fcmToken: token,
+          fcmTokenUpdatedAt: Date.now(), // Timestamp de cuándo se actualizó el token
+        });
+        console.info('✅ Token FCM obtenido y guardado en Firestore (users/' + userId + '/fcmToken)');
+        console.info('📱 Este token permite recibir notificaciones push incluso con la pestaña cerrada.');
         return token;
       } catch (firestoreError) {
         console.error('Error al guardar token FCM en Firestore:', firestoreError);
@@ -136,14 +149,59 @@ export const requestNotificationPermission = async (userId: string): Promise<str
   return null;
 };
 
-export const onForegroundMessage = (): void => {
+/**
+ * Maneja mensajes FCM cuando la app está en foreground (pestaña abierta).
+ * También envía mensajes al Service Worker para manejar navegación desde notificaciones.
+ */
+export const onForegroundMessage = (callback?: (payload: any) => void): void => {
   if (!messaging) return;
+  
   onMessage(messaging, (payload) => {
+    console.log('[Foreground] Mensaje FCM recibido:', payload);
+    
+    // Si hay callback personalizado, llamarlo primero
+    if (callback) {
+      callback(payload);
+    }
+    
+    // Mostrar notificación si hay contenido de notificación
     if (payload.notification) {
-      new Notification(payload.notification.title ?? '¡Alarma MyDays!', {
-        body: payload.notification.body,
-        icon: '/vite.svg'
-      });
+      const notification = new Notification(
+        payload.notification.title ?? 'MyDays',
+        {
+          body: payload.notification.body,
+          icon: '/vite.svg',
+          badge: '/vite.svg',
+          tag: payload.data?.type || 'notification',
+          data: payload.data || {},
+        }
+      );
+      
+      // Manejar clic en la notificación cuando la app está en foreground
+      notification.onclick = () => {
+        window.focus();
+        // Si es una solicitud de unión, enviar mensaje a la app para navegar
+        if (payload.data?.type === 'join_request' && payload.data?.groupId) {
+          // Enviar mensaje al Service Worker para que la app pueda manejar la navegación
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.ready.then((registration) => {
+              registration.active?.postMessage({
+                type: 'navigate',
+                groupId: payload.data.groupId,
+                action: 'show_pending',
+              });
+            });
+          }
+          // También disparar evento personalizado para que App.tsx lo capture
+          window.dispatchEvent(new CustomEvent('fcm-navigate', {
+            detail: {
+              type: 'join_request',
+              groupId: payload.data.groupId,
+            },
+          }));
+        }
+        notification.close();
+      };
     }
   });
 };

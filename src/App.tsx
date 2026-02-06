@@ -58,6 +58,42 @@ const App: React.FC = () => {
     setMyGroups([]);
   }, [user?.uid]);
 
+  // Escuchar mensajes del Service Worker y eventos FCM (navegación desde notificaciones)
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+
+    const handleServiceWorkerMessage = (event: MessageEvent) => {
+      if (event.data && event.data.type === 'navigate') {
+        const { groupId, action } = event.data;
+        if (action === 'show_pending' && groupId) {
+          // Seleccionar el grupo y mostrar solicitudes pendientes
+          const group = myGroups.find((g) => g.id === groupId);
+          if (group) {
+            setVentanaGroup({ id: group.id, name: group.name });
+          }
+        }
+      }
+    };
+
+    const handleFCMNavigate = (event: CustomEvent) => {
+      const { groupId } = event.detail;
+      if (groupId) {
+        const group = myGroups.find((g) => g.id === groupId);
+        if (group) {
+          setVentanaGroup({ id: group.id, name: group.name });
+        }
+      }
+    };
+
+    navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
+    window.addEventListener('fcm-navigate', handleFCMNavigate as EventListener);
+    
+    return () => {
+      navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
+      window.removeEventListener('fcm-navigate', handleFCMNavigate as EventListener);
+    };
+  }, [myGroups]);
+
   // Grupo actual: el que usamos para ver alarmas y para guardar/toggle/borrar. Prioridad: ventanita > perfil (así al crear se usa el nuevo).
   const currentGroupId = ventanaGroup?.id ?? profile?.groupId ?? null;
   const currentGroupName = ventanaGroup?.name ?? profile?.groupName ?? (currentGroupId ? `Grupo ${currentGroupId}` : null);
@@ -170,21 +206,44 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (!alarms.length || Notification?.permission !== 'granted') return;
+    
     const timeouts: number[] = [];
     const now = Date.now();
-    for (const alarm of alarms) {
-      if (!alarm.active) continue;
-      const alarmAt = new Date(`${alarm.date}T${alarm.time}`).getTime();
-      if (alarmAt <= now) continue;
-      const delay = alarmAt - now;
-      const id = window.setTimeout(() => {
-        new Notification(alarm.label || 'Alarma', {
-          body: `${alarm.date} a las ${alarm.time}`,
-          icon: '/vite.svg',
-        });
-      }, delay);
-      timeouts.push(id);
-    }
+    
+    // Importar función de conversión de zona horaria
+    import('./utils/timezone').then(({ utcToLocal }) => {
+      for (const alarm of alarms) {
+        if (!alarm.active) continue;
+        
+        // Usar datetimeUTC si existe (nuevo formato), sino usar date+time (compatibilidad con alarmas antiguas)
+        let alarmAt: number;
+        if (alarm.datetimeUTC) {
+          alarmAt = new Date(alarm.datetimeUTC).getTime();
+        } else if (alarm.date && alarm.time) {
+          // Fallback para alarmas antiguas sin datetimeUTC
+          alarmAt = new Date(`${alarm.date}T${alarm.time}`).getTime();
+        } else {
+          continue; // Saltar alarmas sin fecha/hora válida
+        }
+        
+        if (alarmAt <= now) continue;
+        const delay = alarmAt - now;
+        
+        // Convertir UTC a hora local para mostrar en la notificación
+        const localDateTime = alarm.datetimeUTC 
+          ? utcToLocal(alarm.datetimeUTC)
+          : { date: alarm.date || '', time: alarm.time || '' };
+        
+        const id = window.setTimeout(() => {
+          new Notification(alarm.label || 'Alarma', {
+            body: `${localDateTime.date} a las ${localDateTime.time}`,
+            icon: '/vite.svg',
+          });
+        }, delay);
+        timeouts.push(id);
+      }
+    });
+    
     return () => timeouts.forEach(clearTimeout);
   }, [alarms]);
 
@@ -317,8 +376,14 @@ const App: React.FC = () => {
     setAlarmError(null);
     const timeoutId = window.setTimeout(() => setSavingAlarm(false), 12000);
     try {
+      // Convertir fecha/hora local a UTC (ISO 8601)
+      const { localToUTC } = await import('./utils/timezone');
+      const datetimeUTC = localToUTC(data.date, data.time);
+      
       // Asegurar que siempre incluya el uid del usuario
       const alarmData: Omit<Alarm, 'id'> = {
+        datetimeUTC, // Guardar en UTC (ISO 8601)
+        // Mantener campos legacy para compatibilidad con datos antiguos
         time: data.time,
         date: data.date,
         label: data.label.trim() || 'Nueva Alarma',

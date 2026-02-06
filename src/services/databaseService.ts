@@ -286,13 +286,17 @@ export const createOrUpdateUserProfile = async (
   groupName: string | null = null
 ): Promise<UserProfile> => {
   const userRef = doc(db, 'users', user.uid);
+  
+  // Detectar zona horaria del navegador
+  const { getUserTimezone } = await import('../utils/timezone');
+  const timezone = getUserTimezone();
 
   try {
     // Usar getDocFromServer para asegurar que leemos del servidor
     const userSnap = await getDocFromServer(userRef);
 
     if (!userSnap.exists()) {
-      // Crear nuevo perfil
+      // Crear nuevo perfil con timezone
       const newProfile: UserProfile = {
         uid: user.uid,
         email: user.email,
@@ -300,11 +304,12 @@ export const createOrUpdateUserProfile = async (
         photoURL: user.photoURL,
         groupId,
         groupName,
+        timezone, // Guardar zona horaria del usuario
       };
       await setDoc(userRef, newProfile);
       return newProfile;
     } else {
-      // Actualizar perfil existente
+      // Actualizar perfil existente (actualizar timezone si cambió)
       const existingData = userSnap.data() as UserProfile;
       const updates: Partial<UserProfile> = {
         email: user.email ?? existingData.email,
@@ -312,6 +317,7 @@ export const createOrUpdateUserProfile = async (
         photoURL: user.photoURL ?? existingData.photoURL,
         groupId: groupId ?? existingData.groupId,
         groupName: groupName ?? existingData.groupName,
+        timezone, // Actualizar timezone siempre (por si el usuario viajó)
       };
       await updateDoc(userRef, updates);
       return { ...existingData, ...updates } as UserProfile;

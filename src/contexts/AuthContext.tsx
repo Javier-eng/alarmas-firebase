@@ -46,16 +46,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const p = await createOrUpdateUser(u);
           setProfileState(p);
           
-          // Web Push: solicitar permiso de notificaciones nada más loguearse y guardar FCM token en el perfil
+          // Web Push: solicitar permiso de notificaciones nada más loguearse y guardar FCM token en Firestore
+          // El token se guarda en users/{uid}.fcmToken cada vez que el usuario entra para asegurar que esté actualizado
           setTimeout(async () => {
             const currentUser = auth.currentUser;
             if (currentUser && currentUser.uid === u.uid) {
               try {
+                // Solicitar permisos y obtener/actualizar el FCM token
+                // Esta función guarda automáticamente el token en Firestore (users/{uid}.fcmToken)
                 const token = await requestNotificationPermission(u.uid);
                 if (token) {
-                  // Token guardado en users/{uid}.fcmToken por requestNotificationPermission
+                  // Actualizar el estado del perfil con el token
                   setProfileState((prev) => (prev ? { ...prev, fcmToken: token } : prev));
+                  console.info('✅ FCM Token guardado en Firestore. El usuario puede recibir notificaciones push.');
                 }
+                // Configurar listener para mensajes en foreground
                 onForegroundMessage();
               } catch (notificationError) {
                 console.debug('Error al solicitar permisos de notificación:', notificationError);
