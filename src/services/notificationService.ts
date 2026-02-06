@@ -181,13 +181,15 @@ export const onForegroundMessage = (callback?: (payload: any) => void): void => 
       notification.onclick = () => {
         window.focus();
         // Si es una solicitud de unión, enviar mensaje a la app para navegar
-        if (payload.data?.type === 'join_request' && payload.data?.groupId) {
+        const data = payload.data;
+        if (data?.type === 'join_request' && data?.groupId) {
+          const groupId = data.groupId;
           // Enviar mensaje al Service Worker para que la app pueda manejar la navegación
           if ('serviceWorker' in navigator) {
             navigator.serviceWorker.ready.then((registration) => {
               registration.active?.postMessage({
                 type: 'navigate',
-                groupId: payload.data.groupId,
+                groupId,
                 action: 'show_pending',
               });
             });
@@ -196,7 +198,7 @@ export const onForegroundMessage = (callback?: (payload: any) => void): void => 
           window.dispatchEvent(new CustomEvent('fcm-navigate', {
             detail: {
               type: 'join_request',
-              groupId: payload.data.groupId,
+              groupId,
             },
           }));
         }
