@@ -69,48 +69,117 @@ if ('serviceWorker' in navigator) {
 
   // Registrar inmediatamente, no esperar a 'load' (mejor para móviles)
   const registerServiceWorker = async () => {
+    const swPath = '/firebase-messaging-sw.js';
+    
     try {
       showSWStatus('Registrando Service Worker...', false);
       
-      const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', { 
+      // Verificar que el archivo existe antes de registrarlo
+      try {
+        const response = await fetch(swPath, { method: 'HEAD' });
+        if (!response.ok && response.status !== 404) {
+          throw new Error(`Archivo no accesible: HTTP ${response.status}`);
+        }
+      } catch (fetchError) {
+        console.warn('No se pudo verificar el archivo SW (puede ser normal):', fetchError);
+      }
+      
+      // Registrar con path absoluto y scope explícito
+      const registration = await navigator.serviceWorker.register(swPath, { 
         scope: '/' // Scope explícito para toda la web
       });
       
+      console.info('Service Worker registro iniciado, scope:', registration.scope);
+      
       // Esperar a que el Service Worker esté activo (importante para Android)
       if (registration.installing) {
-        await new Promise<void>((resolve) => {
+        console.info('Service Worker instalando...');
+        await new Promise<void>((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            reject(new Error('Timeout esperando activación del Service Worker'));
+          }, 10000); // 10 segundos timeout
+          
           registration.installing!.addEventListener('statechange', () => {
-            if (registration.installing!.state === 'activated') {
+            const state = registration.installing!.state;
+            console.info('Service Worker estado:', state);
+            if (state === 'activated') {
+              clearTimeout(timeout);
               resolve();
+            } else if (state === 'redundant') {
+              clearTimeout(timeout);
+              reject(new Error('Service Worker marcado como redundante'));
             }
           });
         });
       } else if (registration.waiting) {
-        // Si está esperando, activarlo
+        console.info('Service Worker esperando, activando...');
         registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+        // Esperar un momento para que se active
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
       
       // Verificar que el Service Worker esté realmente activo
       const activeSW = registration.active;
       if (activeSW && activeSW.state === 'activated') {
         showSWStatus('✅ Service Worker Registrado', false);
-        console.info('Service Worker registrado correctamente:', registration.scope);
+        console.info('✅ Service Worker registrado correctamente:', registration.scope);
       } else {
-        showSWStatus('⚠️ Service Worker en proceso...', false);
+        const state = activeSW?.state || 'unknown';
+        throw new Error(`Service Worker no activado. Estado: ${state}`);
       }
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      showSWStatus(`❌ Error: ${errorMsg.substring(0, 50)}`, true);
-      console.error('Error al registrar Service Worker:', error);
+      // Capturar error completo con todos los detalles
+      let errorDetails = '';
+      let errorMessage = 'Error desconocido';
       
-      // En desarrollo, mostrar detalles adicionales
-      if (import.meta.env.DEV) {
-        console.warn('Detalles del error:', error);
-        // En desarrollo, también mostrar alert para debugging
-        setTimeout(() => {
-          alert(`Error al registrar Service Worker:\n${errorMsg}\n\nRevisa la consola para más detalles.`);
-        }, 1000);
+      if (error instanceof Error) {
+        errorMessage = error.message;
+        errorDetails = `Mensaje: ${error.message}\n`;
+        if (error.stack) {
+          errorDetails += `Stack: ${error.stack.substring(0, 200)}\n`;
+        }
+        if ((error as any).name) {
+          errorDetails += `Tipo: ${(error as any).name}\n`;
+        }
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+        errorDetails = `Error: ${error}`;
+      } else {
+        errorMessage = String(error);
+        errorDetails = `Error: ${JSON.stringify(error, null, 2)}`;
       }
+      
+      // Detectar tipo de error común
+      let errorType = 'Desconocido';
+      if (errorMessage.includes('Failed to register') || errorMessage.includes('register')) {
+        errorType = 'Error de registro';
+      } else if (errorMessage.includes('404') || errorMessage.includes('not found')) {
+        errorType = 'Archivo no encontrado';
+      } else if (errorMessage.includes('MIME') || errorMessage.includes('content-type')) {
+        errorType = 'Error de MIME type';
+      } else if (errorMessage.includes('scope') || errorMessage.includes('permission')) {
+        errorType = 'Error de permisos/scope';
+      } else if (errorMessage.includes('HTTPS') || errorMessage.includes('secure')) {
+        errorType = 'Error de seguridad (requiere HTTPS)';
+      }
+      
+      // Mostrar error en pantalla
+      showSWStatus(`❌ Error: ${errorType}`, true);
+      console.error('❌ Error completo al registrar Service Worker:', error);
+      console.error('Detalles:', errorDetails);
+      
+      // Mostrar alert con error técnico completo (especialmente importante en móvil)
+      const fullErrorMsg = `Error al registrar Service Worker\n\n` +
+        `Tipo: ${errorType}\n` +
+        `Mensaje: ${errorMessage}\n\n` +
+        `Path intentado: ${swPath}\n` +
+        `Scope: /\n\n` +
+        `Detalles técnicos:\n${errorDetails.substring(0, 300)}`;
+      
+      // Siempre mostrar alert en móvil, también en desarrollo
+      setTimeout(() => {
+        alert(fullErrorMsg);
+      }, 1500);
     }
   };
   
